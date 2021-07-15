@@ -1,2 +1,1 @@
-#git and github
-first try
+10Hz gps speed meter
