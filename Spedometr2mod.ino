@@ -1,7 +1,7 @@
 #include <SSD1306.h>  // Библиотека для работы с дисплеем
 #include "UbloxGPS2.h" // Библиотека для работы с GPS
-#include "font.h"     // Шрифт Orbitron_Light_26, говно шрифт, не моноширинный
-#include "font50.h"     // Шрифт 50, говно шрифт, не моноширинный
+#include "font.h"     // Шрифт Orbitron_Light_26, 
+#include "font50.h"    
 #include "font7seg.h"
 #include "Arimo.h"
 #include "FS.h"
@@ -57,9 +57,9 @@ Metering metering;
 Metering meterings[10];
 
 void setup() {
-  delay(1500);                    // Без этой задержки плата GPS подвешивает Wemos
-  serial.begin(115200);            // Скорость обмена с GPS, при 115200 мой чип работает не стабильно
-  Serial.begin(115200);           // Вывод в порт для дебага, 115200 в оригинале
+  delay(1500);                    
+  serial.begin(115200);            // Скорость обмена с GPS
+  Serial.begin(115200);           // Вывод в порт для дебага
   WiFi.mode( WIFI_OFF );
   WiFi.forceSleepBegin();
   pinMode(0, INPUT);
