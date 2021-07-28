@@ -1,1 +1,3 @@
-10Hz gps speed meter
+10Hz gps speedometer. 
+Custom RaceLogic 
+ESP32 Based
