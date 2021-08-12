@@ -1,9 +1,9 @@
 #include <SSD1306.h>  // Библиотека для работы с дисплеем
 #include "UbloxGPS.h" // Библиотека для работы с GPS
-#include "font.h"     // Шрифт Orbitron_Light_26, не моноширинный
-#include "font50.h"   // Шрифт 
-#include "font7seg.h" // Шрифт 50
-#include "Arimo.h" //И еще Шрифт
+#include "font.h"     
+#include "font50.h"    
+#include "font7seg.h" 
+#include "Arimo.h"    
 #include "FS.h"
 #include <ESP8266WiFi.h>
 #include <Adafruit_ADXL345_U.h>
@@ -23,7 +23,7 @@ Adafruit_ADXL345_Unified accel = Adafruit_ADXL345_Unified(12345);
 int gpsHour;
 int timezone = 3;
 int iz;
-int initaccel;
+int initaccel; // Фиксация начального положения устройства
 
 // Инициализируем дисплей 128х64 подключенный к пинам D2 и D1
 SSD1306  display(0x3c, 5, 4);
@@ -53,7 +53,7 @@ float speed2;
 float speed3;
 int rollspeed = 200;
 int startrange;
-bool startacc = false;
+bool startacc = false;  // Флаг старта по акселерометру
 int screen = 0;
 String logbuff[40]; String str;
 // Cтруктура результатов
@@ -73,12 +73,12 @@ Metering metering;
 Metering meterings[10];
 
 void setup() {
-  delay(1500);                    // Без этой задержки плата GPS подвешивает Wemos
-  serial.begin(115200);            // Скорость обмена с GPS, при 115200 мой чип работает не стабильно
-  Serial.begin(115200);           // Вывод в порт для дебага, 115200 в оригинале
+  delay(1500);                    // Без этой задержки плата GPS подвешивает ESP
+  serial.begin(115200);           // Скорость обмена с GPS
+  Serial.begin(115200);           // Вывод в порт для дебага
 
   EEPROM.begin(512);
-  if ( EEPROM.read(rangeaddr) != 0 &&  EEPROM.read(rangeaddr) != 1 )
+  if ( EEPROM.read(rangeaddr) != 0 &&  EEPROM.read(rangeaddr) != 1 ) // Write to EEPROM if empty
   {
     EEPROM.write(rangeaddr, 0);
     EEPROM.commit();
@@ -99,7 +99,7 @@ void setup() {
     speed3 = 100;
     rollspeed = 150;
   }
-  WiFi.mode( WIFI_OFF );
+  WiFi.mode( WIFI_OFF ); 
   WiFi.forceSleepBegin();
   pinMode(0, INPUT);
   digitalWrite(0, HIGH);
@@ -207,10 +207,7 @@ void loop() {
       }
     }
      Serial.println("LongPress " + String(longPressActive) + " screen " + String(screen));
-  }
-
-
-  // 
+  } 
 
   currentMillis = millis(); // текущее время в миллисекундах
   int msgType = processGPS();
@@ -254,7 +251,7 @@ void loop() {
       metering.met200 = false;
     }
     if (!metering.met30 && !metering.met60 && !metering.met100 && !metering.met200 && gpsSpeedKm > 20) {
-      clearResult();  // обнуление результатов на экране при достижении скорости
+      clearResult();  // обнуление результатов на экране при достижении скорости 20
     }
 
     meteringTime = (float)(currentMillis - startMillis) / 1000; // Время замера
@@ -277,7 +274,7 @@ void loop() {
       metering.accel100 = meteringTime - metering.accel30; // Разгон до 100км/ч
       metering.met100 = true;
 
-      save = true;
+      save = true;  // если все 3 скорости прошли - сохраняем результаты в память
     }
     //
     if (!metering.met200 && gpsSpeedKm >= rollspeed) {
@@ -390,7 +387,7 @@ void updateDisplay() {
   // Рисуем индикатор приёма
   display.drawVerticalLine(1, 12, 2);
   display.drawVerticalLine(0, 12, 2);
-  // Херовый приём
+  // Плохой приём
   if (NumSatellites > 3 ) {
     display.drawVerticalLine(4, 10, 4);
     display.drawVerticalLine(3, 10, 4);
