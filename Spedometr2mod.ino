@@ -1,18 +1,30 @@
 #include <SSD1306.h>  // Библиотека для работы с дисплеем
-#include "UbloxGPS2.h" // Библиотека для работы с GPS
-#include "font.h"     // Шрифт Orbitron_Light_26, 
-#include "font50.h"    
-#include "font7seg.h"
-#include "Arimo.h"
+#include "UbloxGPS.h" // Библиотека для работы с GPS
+#include "font.h"     // Шрифт Orbitron_Light_26, не моноширинный
+#include "font50.h"   // Шрифт 
+#include "font7seg.h" // Шрифт 50
+#include "Arimo.h" //И еще Шрифт
 #include "FS.h"
 #include <ESP8266WiFi.h>
 #include <Adafruit_ADXL345_U.h>
+#include "EEPROM.h"
+int rangeaddr = 0;
+#define EEPROM_SIZE 64
+
+long prev = 0;
+long buttonTimer = 0;
+long longPressTime = 2000;
+
+boolean buttonActive = false;
+boolean longPressActive = false;
+
+
 Adafruit_ADXL345_Unified accel = Adafruit_ADXL345_Unified(12345);
 int gpsHour;
 int timezone = 3;
 int iz;
 int initaccel;
-int some;
+
 // Инициализируем дисплей 128х64 подключенный к пинам D2 и D1
 SSD1306  display(0x3c, 5, 4);
 const char* filename = "/log.txt";
@@ -36,7 +48,11 @@ int ScreenUpdateTimeOSV = 10; // Время обновления экрана к
 char symbols[5] = "|/-\\";
 int symbolnow = 0;
 bool save = false;
-
+float speed1;
+float speed2;
+float speed3;
+int rollspeed = 200;
+int startrange;
 bool startacc = false;
 int screen = 0;
 String logbuff[40]; String str;
@@ -57,9 +73,32 @@ Metering metering;
 Metering meterings[10];
 
 void setup() {
-  delay(1500);                    
-  serial.begin(115200);            // Скорость обмена с GPS
-  Serial.begin(115200);           // Вывод в порт для дебага
+  delay(1500);                    // Без этой задержки плата GPS подвешивает Wemos
+  serial.begin(115200);            // Скорость обмена с GPS, при 115200 мой чип работает не стабильно
+  Serial.begin(115200);           // Вывод в порт для дебага, 115200 в оригинале
+
+  EEPROM.begin(512);
+  if ( EEPROM.read(rangeaddr) != 0 &&  EEPROM.read(rangeaddr) != 1 )
+  {
+    EEPROM.write(rangeaddr, 0);
+    EEPROM.commit();
+  }
+
+  startrange = EEPROM.read(rangeaddr);
+  if (startrange == 0)
+  {
+    speed1 = 100;
+    speed2 = 150;
+    speed3 = 200;
+    rollspeed = 200;
+  }
+  if (startrange == 1)
+  {
+    speed1 = 30;
+    speed2 = 60;
+    speed3 = 100;
+    rollspeed = 150;
+  }
   WiFi.mode( WIFI_OFF );
   WiFi.forceSleepBegin();
   pinMode(0, INPUT);
@@ -115,7 +154,7 @@ void setup() {
   }
 
   gpsSetup();                     // Настройка модуля Ublox
-  metering = {100, 150, 200, 0, true, true, true, true }; // Тут будем хранить результаты
+  metering = {speed1, speed2, speed3, rollspeed, true, true, true, true }; // Тут будем хранить результаты
 
   // Вывод приветствия
 
@@ -123,10 +162,13 @@ void setup() {
   display.flipScreenVertically();
   display.setTextAlignment(TEXT_ALIGN_CENTER);
   display.setFont(ArialMT_Plain_10);
-  display.drawString(64, 5, "100-150-200");
-  display.setFont(ArialMT_Plain_24);
-  display.drawString(65, 13, "SpeedMetr");
-  display.setFont(ArialMT_Plain_10);
+  if (startrange == 0)
+    display.drawString(64, 5, "100-150-200");
+  if (startrange == 1)
+    display.drawString(64, 5, "30-60-100");
+
+  display.drawString(64, 15, "SpeedGauge");
+  display.drawString(64, 26, "Roll 100-" + String(rollspeed));
   display.drawString(64, 40, "Used " + String(fs_info.usedBytes / 1024) + " of " + String(fs_info.totalBytes / 1024) + " Kb");
   display.drawString(64, 50, "GPS 10Hz + GYRO");
   display.display();
@@ -134,13 +176,42 @@ void setup() {
 
 }
 void loop() {
+  if (!start) {
+    if (digitalRead(0) == LOW) {
+      if (buttonActive == false) {
+        buttonActive = true;
+        buttonTimer = millis();
+      }
+      if ((millis() - buttonTimer > longPressTime) && (longPressActive == false)) {
+        longPressActive = true;
+        // TODO button is pressed long
+        if ( EEPROM.read(rangeaddr) == 0)  EEPROM.write(rangeaddr, 1);
+        else if (EEPROM.read(rangeaddr) == 1)  EEPROM.write(rangeaddr, 0);
+        EEPROM.commit();
+        // Serial.println(EEPROM.read(rangeaddr));
+        delay(200);
+        updateRestart();
+      }
 
-  if (digitalRead(0) == LOW)
-  { screen++;
-    if (screen > 3) screen = 0;
-    if (screen == 1  ) deBug = true; else deBug = false;
-    delay(200);
+    } else {
+      if (buttonActive == true) {
+        if (longPressActive == true) {
+          longPressActive = false;
+        } else {
+          screen++;
+          if (screen > 3) screen = 0;
+          if (screen == 1  ) deBug = true; else deBug = false;
+          delay(200);
+        }
+        buttonActive = false;
+      }
+    }
+     Serial.println("LongPress " + String(longPressActive) + " screen " + String(screen));
   }
+
+
+  // 
+
   currentMillis = millis(); // текущее время в миллисекундах
   int msgType = processGPS();
   if (msgType == MT_NAV_PVT) {
@@ -157,7 +228,7 @@ void loop() {
   if (deBug && startacc) {
     {
       loops++;
-      delay(15);
+      delay(12);
     }
     if ( loops > 210 ) {
       loops = 0;
@@ -190,35 +261,35 @@ void loop() {
     meteringTime200 = (float)(currentMillis - startMillis) / 1000; // Время замера
     // Заношу результаты замера
     if (!metering.met200start && gpsSpeedKm >= 100) {
-      startMillis200=millis();
+      startMillis200 = millis();
       metering.met200start = true;
     }
-    if (!metering.met30 && gpsSpeedKm >= 100) {
+    if (!metering.met30 && gpsSpeedKm >= speed1) {
       metering.accel30 = meteringTime; // Разгон до 30км/ч
       metering.met30 = true;
-      
+
     }
-    if (!metering.met60 && gpsSpeedKm >= 150) {
+    if (!metering.met60 && gpsSpeedKm >= speed2) {
       metering.accel60 = meteringTime - metering.accel30; // Разгон до 60км/ч
       metering.met60 = true;
     }
-    if (!metering.met100 && gpsSpeedKm >= 200) {
+    if (!metering.met100 && gpsSpeedKm >= speed3) {
       metering.accel100 = meteringTime - metering.accel30; // Разгон до 100км/ч
       metering.met100 = true;
-     
+
       save = true;
     }
-   // 
-   if (!metering.met200 && gpsSpeedKm >= 200){
-     metering.accel200 = (float)(currentMillis - startMillis200) / 1000;
-     metering.met200 = true;
-   }
- if (gpsSpeedKm<100){
-  metering.met200=false;
-  metering.met200start = false;
- }
-    
-  } else if (start && 0 == gpsSpeedKm && abs(iz) < 2) { // Если остановились
+    //
+    if (!metering.met200 && gpsSpeedKm >= rollspeed) {
+      metering.accel200 = (float)(currentMillis - startMillis200) / 1000;
+      metering.met200 = true;
+    }
+    if (gpsSpeedKm < 100) {
+      metering.met200 = false;
+      metering.met200start = false;
+    }
+
+  } else if (start && 0 == gpsSpeedKm && abs(iz) < 3) { // Если остановились
     start = false;
     startacc = false;
     digitalWrite(2, LOW);
@@ -247,12 +318,12 @@ void loop() {
     {
       meterings[i + 1] = meteringsNew[i];
     }
-    Serial.println(String((String(meterings[0].accel30))+ " " +String(meterings[0].accel60)+ " " +String(meterings[0].accel100)+ " " +String(meterings[0].accel200)+ " | " + String(gpsHour) + ":" + String(ubxMessage.navPvt.minute)));
+    Serial.println(String((String(meterings[0].accel30)) + " " + String(meterings[0].accel60) + " " + String(meterings[0].accel100) + " " + String(meterings[0].accel200) + " | " + String(gpsHour) + ":" + String(ubxMessage.navPvt.minute)));
     delete[] meteringsNew;
     //-------------
     File f = SPIFFS.open(filename, "a");
     logbuff[1] = String(String(metering.accel30) + " " + String(metering.accel60) + " " + String(metering.accel100) + " | " + String(gpsHour) + ":" + String(ubxMessage.navPvt.minute) + "$");
-   // Serial.println(logbuff[1]);
+    // Serial.println(logbuff[1]);
     f.print(logbuff[1]);
     // Serial.println(f.size());
     f.close();  //Close file
@@ -362,7 +433,7 @@ void updateDisplay() {
     }
     if (deBug)
     {
-      display.drawString(1, 54, "G:" + String(iz) + " GS: " + String(startacc)+ " M: " + String(metering.accel200));
+      display.drawString(1, 54, "G:" + String(iz) + " GS: " + String(startacc) + " M: " + String(metering.accel200));
     }
     else
       display.drawString(1, 54, "SEARCH GPS");
@@ -399,4 +470,18 @@ void updateDisplay() {
   display.setFont(Arimo_Bold_16);
   display.drawString(128, 48, (String)metering.accel100);
   display.display();
+}
+
+void updateRestart()
+{
+  display.clear();
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.setFont(ArialMT_Plain_10);
+  display.drawString(64, 20, (String)"Range changed");
+  display.drawString(64, 30, (String)"Restarting");
+  display.display();
+  Serial.println("RESTARTING");
+  delay(500);
+  ESP.restart();
+
 }
